@@ -24,7 +24,7 @@ impl Parser {
         let parser = Parser {
             main_regex: Regex::new(r"\d+[ ](kc|czk|kč)|\d+(kc|czk|kč)|\d+[k]|\d+[.|,]\d+[k]|\d+(,-)").unwrap(),
             value_regex: Regex::new(r"\d*[,|.]\d+|\d+").unwrap(),
-            unit_regex: Regex::new(r"([^0-9]+)$").unwrap()
+            unit_regex: Regex::new(r"([^\d]+)$").unwrap()
         };
         parser
     }
