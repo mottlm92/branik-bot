@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 regex = "1.7.1"
+roux = "2.2.5"
+tokio = {version = "1.25.0", features = ["full"]}

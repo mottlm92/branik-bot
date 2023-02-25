@@ -56,7 +56,7 @@ impl Parser {
 
     fn get_value_from_match(&self, match_str: &str) -> Option<f32> {
         let capture = self.value_regex.captures(&match_str).unwrap();
-        let value = match capture[0].replace(",", ".").parse() {
+        match capture[0].replace(",", ".").parse() {
             Ok(v) => if v > 0.0 {
                 return Some(v)
             },
