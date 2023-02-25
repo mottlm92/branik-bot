@@ -15,13 +15,11 @@ impl CommentReader {
                     Some(comment_id) => comment_id,
                     None => "".to_string()
                 }; 
-                println!("Last read comment id = {}", last_read_comment_id);
                 let mut result: Vec<CommentData> =  vec![];
                 for comment in comments.data.children {
                     if comment.data.id.clone().unwrap() == last_read_comment_id {
                         break;
                     }
-                    println!("Add comment id {}", comment.data.id.clone().unwrap());
                     result.push(comment.data);
                 }
                 if result.len() == 0 {
@@ -29,7 +27,6 @@ impl CommentReader {
                 }
                 // save id of first comment we received
                 let latest_comment_id = &result[0].id.clone().unwrap();
-                println!("save latest comment id {}", &latest_comment_id);
                 Self::save_latest_read_comment(&latest_comment_id);
                 return Some(result);
             },
@@ -53,11 +50,11 @@ impl CommentReader {
         match open_file {
             Ok(mut file) => {
                 match file.write_all(comment_id.as_bytes()) {
-                    Ok(_) => return,
-                    Err(_) => return,
+                    Ok(_) => (),
+                    Err(_) => (),
                 }
             },
-            Err(_) => return
+            Err(_) => ()
         }
     }
 }

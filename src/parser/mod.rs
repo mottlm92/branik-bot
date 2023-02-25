@@ -9,8 +9,8 @@ pub struct Parser {
 }
 
 pub struct ParseResult {
-    parsed_value: String,
-    result_value: f32,
+    pub parsed_value: String,
+    pub result_value: f32,
 }
 
 impl Display for ParseResult {
@@ -22,7 +22,7 @@ impl Display for ParseResult {
 impl Parser {
     pub fn new() -> Parser {
         let parser = Parser {
-            main_regex: Regex::new(r"\d+[ ](kc|czk|kč)|\d+(kc|czk|kč)|\d+[k]|\d+[.|,]\d+[k]|\d+(,-)").unwrap(),
+            main_regex: Regex::new(r"\d+[ ](kc|czk|kč)|\d+(kc|czk|kč)|( |^)\d+[k]|( |^)\d+[.|,]\d+[k]|\d+(,-)").unwrap(),
             value_regex: Regex::new(r"\d*[,|.]\d+|\d+").unwrap(),
             unit_regex: Regex::new(r"([^\d]+)$").unwrap()
         };
@@ -38,12 +38,13 @@ impl Parser {
         let mut parsed_results: Vec<ParseResult> = vec![];
         let captures = self.main_regex.captures_iter(&binding);
         for cap in captures {
-            let value = self.get_value_from_match(&cap[0]);
+            let cap = &cap[0].trim();
+            let value = self.get_value_from_match(cap);
             match value {
                 Some(v) => {
-                    let v = self.get_true_value(v, &cap[0]);
+                    let v = self.get_true_value(v, cap);
                     let result = ParseResult {
-                        parsed_value: cap[0].to_string(),
+                        parsed_value: cap.to_string(),
                         result_value: v
                     };
                     parsed_results.push(result);
