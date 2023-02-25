@@ -11,7 +11,11 @@ use roux::comment::CommentData;
 #[tokio::main]
 async fn main() {
     let parser = Parser::new();
-    match CommentReader::read_latest_comments().await {
+    let comment_reader = CommentReader { 
+        subreddit: "czech".to_string(),
+        last_comment_storage_path: "./data/last_comment".to_string()
+    };
+    match comment_reader.read_latest_comments().await {
         Some(comments) => {
             parse_comments_and_create_responses(parser, comments);
         },
