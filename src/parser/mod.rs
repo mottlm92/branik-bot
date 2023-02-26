@@ -24,7 +24,7 @@ impl Parser {
         let parser = Parser {
             main_regex: Regex::new(r"( |^)((\d+[ ]?(kc|kč|czk|mega))|(\d+[,.]?\d+(k))|(\d+[k]))+(\b)|(\d+(,-))").unwrap(),
             value_regex: Regex::new(r"\d*[,|.]\d+|\d+").unwrap(),
-            unit_regex: Regex::new(r"([a-z+]+)|(mega)|(,-)").unwrap()
+            unit_regex: Regex::new(r"([\p{L}+]+)|(mega)|(,-)").unwrap()
         };
         parser
     }
@@ -89,11 +89,11 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_k() {
+    fn test_parse_unit() {
         let test_parser = Parser::new();
-        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not!";
+        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not! also add 60 kc and 100kc";
         let results = test_parser.parse(test_data).unwrap();
-        assert_eq!(results.len(), 4);
+        assert_eq!(results.len(), 6);
         let result = &results[0];
         assert_eq!("200k", result.parsed_value);
         assert_eq!(200000.0, result.result_value);
@@ -106,5 +106,34 @@ mod tests {
         let result = &results[3];
         assert_eq!("2 mega", result.parsed_value);
         assert_eq!(2000000.0, result.result_value);
+        let result = &results[4];
+        assert_eq!("60 kc", result.parsed_value);
+        assert_eq!(60.0, result.result_value);
+        let result = &results[5];
+        assert_eq!("100kc", result.parsed_value);
+        assert_eq!(100.0, result.result_value);
+    }
+
+    #[test]
+    fn test_get_true_value(){
+        let test_parser = Parser::new();
+        let value = 100.0;
+        let match_str = "100kc";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_eq!(value, true_value);
+        let value = 399.0;
+        let match_str = "399 kč";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_eq!(value, true_value);
+        let value = 1.5;
+        let match_str = "1.5k";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_ne!(value, true_value);
+        assert_eq!(value * 1000.0, true_value);
+        let value = 5.0;
+        let match_str = "5 mega";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_ne!(value, true_value);
+        assert_eq!(value * 1000000.0, true_value);
     }
 }
