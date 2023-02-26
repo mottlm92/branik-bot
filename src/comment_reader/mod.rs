@@ -29,7 +29,7 @@ impl CommentReader {
                 }
                 // save id of first comment we received
                 let latest_comment_id = &result[0].id.clone().unwrap();
-                self.save_latest_read_comment(&latest_comment_id);
+                // self.save_latest_read_comment(&latest_comment_id);
                 return Some(result);
             },
             Err(_) => return None
