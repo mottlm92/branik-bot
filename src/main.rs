@@ -1,7 +1,7 @@
 pub mod parser;
 pub mod comment_reader;
 
-use std::{fs, io::Write};
+use std::{fs, io::Write, thread, time};
 
 use parser::{Parser, ParseResult};
 use comment_reader::CommentReader;
@@ -15,15 +15,25 @@ async fn main() {
         subreddit: "czech".to_string(),
         last_comment_storage_path: "./data/last_comment".to_string()
     };
-    match comment_reader.read_latest_comments().await {
-        Some(comments) => {
-            parse_comments_and_create_responses(parser, comments);
-        },
-        None => ()
+    let mut count = 0;
+    loop {
+        println!("\n\nGET NEW SET OF COMMENTS");
+        match comment_reader.read_latest_comments().await {
+            Some(comments) => {
+                println!("Found {} new comments", comments.len());
+                parse_comments_and_create_responses(&parser, comments);
+            },
+            None => ()
+        }
+        count += 1;
+        if count == 20 {
+            break;
+        }
+        thread::sleep(time::Duration::from_secs(60 * 4));
     }
 }
 
-fn parse_comments_and_create_responses(parser: Parser, comments: Vec<CommentData>) {
+fn parse_comments_and_create_responses(parser: &Parser, comments: Vec<CommentData>) {
     let mut responses = 0;
     for comment in comments.iter() {
         match &comment.body {
@@ -53,12 +63,12 @@ fn generate_message_for_parse_results(parse_results: Vec<ParseResult>, comment: 
     for result in parse_results {
         result_message += &generate_parse_result_row(result);
     }
-    result_message += &format!("\n\nI did this in response to {}", comment).to_string();
+    result_message += &format!("\n\nI did this in response to {}\n\n\n", comment).to_string();
     result_message
 }
 
 fn generate_parse_result_row(parse_result: ParseResult) -> String {
-    format!("> {}\nTo je dost na {:.0} 2L Braníku ve slevě!\n", parse_result.parsed_value, get_branik_amount(parse_result.result_value))    
+    format!("> {}\n\nTo je dost na {:.0} 2L Branika ve sleve!\n", parse_result.parsed_value, get_branik_amount(parse_result.result_value))    
 }
 
 fn get_branik_amount(cash: f32) -> f32 {
@@ -71,6 +81,7 @@ fn post_response(response: &str, _comment_id: &str) {
     let open_file = fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .append(true)
         .open("./data/comments_from_bot");
     match open_file {
         Ok(mut file) => {

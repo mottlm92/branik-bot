@@ -22,9 +22,9 @@ impl Display for ParseResult {
 impl Parser {
     pub fn new() -> Parser {
         let parser = Parser {
-            main_regex: Regex::new(r"\d+[ ](kc|czk|kč)|\d+(kc|czk|kč)|( |^)\d+[k]|( |^)\d+[.|,]\d+[k]|\d+(,-)").unwrap(),
+            main_regex: Regex::new(r"( |^)((\d+[ ]?(kc|kč|czk|mega))|(\d+[,.]?\d+(k))|(\d+[k]))+(\b)|(\d+(,-))").unwrap(),
             value_regex: Regex::new(r"\d*[,|.]\d+|\d+").unwrap(),
-            unit_regex: Regex::new(r"([^\d]+)$").unwrap()
+            unit_regex: Regex::new(r"([a-z+]+)|(mega)|(,-)").unwrap()
         };
         parser
     }
@@ -70,6 +70,7 @@ impl Parser {
         let capture = self.unit_regex.captures(match_str).unwrap();
         match &capture[0] {
             "k" => return value * 1000.0,
+            "mega" => return value * 1000000.0,
             _ => return value,
         }
     }
@@ -90,9 +91,9 @@ mod tests {
     #[test]
     fn test_parse_k() {
         let test_parser = Parser::new();
-        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored..";
+        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not!";
         let results = test_parser.parse(test_data).unwrap();
-        assert_eq!(results.len(), 3);
+        assert_eq!(results.len(), 4);
         let result = &results[0];
         assert_eq!("200k", result.parsed_value);
         assert_eq!(200000.0, result.result_value);
@@ -102,5 +103,8 @@ mod tests {
         let result = &results[2];
         assert_eq!("6,9k", result.parsed_value);
         assert_eq!(6900.0, result.result_value);
+        let result = &results[3];
+        assert_eq!("2 mega", result.parsed_value);
+        assert_eq!(2000000.0, result.result_value);
     }
 }
