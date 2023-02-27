@@ -30,8 +30,8 @@ impl Config {
             user_name: config_lines.next().expect("Expected to have username on index 3 in the config!").to_string(),
             password: config_lines.next().expect("Expected to have password on index 4 in the config!").to_string(),
             subreddit: config_lines.next().expect("Expected to have subreddit on index 4 in the config!").to_string(),
-            post_response: config_lines.next().expect("Expected to have password on index 5 in the config!").to_string() == "true",
-            save_response: config_lines.next().expect("Expected to have subreddit on index 6 in the config!").to_string() == "true",
+            post_response: config_lines.next().expect("Expected to have post response? (true/false) on index 5 in the config!").to_string() == "true",
+            save_response: config_lines.next().expect("Expected to have save response? (true/false) on index 6 in the config!").to_string() == "true",
         }
     }
 }

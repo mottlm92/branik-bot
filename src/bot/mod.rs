@@ -94,7 +94,7 @@ impl BranikBot {
         for result in parse_results {
             result_message += &BranikBot::generate_parse_result_row(result);
         }
-        result_message += &format!("\n\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna) ^(Podnety - Stiznosti - QA na r/branicek)").to_string();
+        result_message += &format!("\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna) ^(Podnety - Stiznosti - QA na r/branicek)").to_string();
         result_message
     }
 
@@ -103,16 +103,16 @@ impl BranikBot {
         match BranikBot::get_branik_amount(parse_result.result_value) {
             BranikAmount::Pet(amount) => {
                 if amount == 0 {
-                    format!("{}Je mi to lito, ale to neni ani na jeden 2L Branik ve sleve", row)
+                    format!("{}Je mi to lito, ale to neni ani na jeden 2L Branik ve sleve\n\n", row)
                 } else {
-                    format!("{}To je dost na {} 2L Branika ve sleve!", row, amount)
+                    format!("{}To je dost na {} 2L Branika ve sleve!\n\n", row, amount)
                 }
             },
             BranikAmount::Pack(amount) => {
-                format!("{}To je dost na {} baliku 2L Branika ve sleve!", row, amount)
+                format!("{}To je dost na {} baliku 2L Branika ve sleve!\n\n", row, amount)
             },
             BranikAmount::Palett(amount, pack_amount) => {
-                format!("{}To je dost na vic jak {} palet{} ({} baliku) 2L Branika ve sleve!",
+                format!("{}To je dost na vic jak {} palet{} ({} baliku) 2L Branika ve sleve!\n\n",
                     row,
                     amount,
                     match amount {
@@ -175,21 +175,21 @@ mod tests {
     fn test_result_row() {
         let parse_result = ParseResult {parsed_value: "20 kc".to_string(), result_value: 20.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 20 kc\n\nJe mi to lito, ale to neni ani na jeden 2L Branik ve sleve"));
+        assert_eq!(response_row, format!("> 20 kc\n\nJe mi to lito, ale to neni ani na jeden 2L Branik ve sleve\n\n"));
         let parse_result = ParseResult {parsed_value: "650kc".to_string(), result_value: 650.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 650kc\n\nTo je dost na 16 2L Branika ve sleve!"));
+        assert_eq!(response_row, format!("> 650kc\n\nTo je dost na 16 2L Branika ve sleve!\n\n"));
         let parse_result = ParseResult {parsed_value: "10k".to_string(), result_value: 10000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 10k\n\nTo je dost na 41 baliku 2L Branika ve sleve!"));
+        assert_eq!(response_row, format!("> 10k\n\nTo je dost na 41 baliku 2L Branika ve sleve!\n\n"));
         let parse_result = ParseResult {parsed_value: "20k".to_string(), result_value: 20000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 20k\n\nTo je dost na vic jak 1 paletu (83 baliku) 2L Branika ve sleve!"));
+        assert_eq!(response_row, format!("> 20k\n\nTo je dost na vic jak 1 paletu (83 baliku) 2L Branika ve sleve!\n\n"));
         let parse_result = ParseResult {parsed_value: "30k".to_string(), result_value: 30000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 30k\n\nTo je dost na vic jak 2 palety (125 baliku) 2L Branika ve sleve!"));
+        assert_eq!(response_row, format!("> 30k\n\nTo je dost na vic jak 2 palety (125 baliku) 2L Branika ve sleve!\n\n"));
         let parse_result = ParseResult {parsed_value: "150k".to_string(), result_value: 150000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 150k\n\nTo je dost na vic jak 13 palet (626 baliku) 2L Branika ve sleve!"));
+        assert_eq!(response_row, format!("> 150k\n\nTo je dost na vic jak 13 palet (626 baliku) 2L Branika ve sleve!\n\n"));
     }
 }
