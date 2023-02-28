@@ -18,6 +18,8 @@ enum BranikAmount {
     Palett(u32, u32)
 }
 
+const ONE_BRANIK: f32 = 43.9;
+
 impl BranikBot {
     pub async fn respawn() -> Self {
         let config = match Config::load() {
@@ -94,7 +96,7 @@ impl BranikBot {
         for result in parse_results {
             result_message += &BranikBot::generate_parse_result_row(result);
         }
-        result_message += &format!("\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna) ^(Podnety - Stiznosti - QA na r/branicek)").to_string();
+        result_message += &format!("\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna. Podnety - Stiznosti - QA na r/branicek)").to_string();
         result_message
     }
 
@@ -127,7 +129,6 @@ impl BranikBot {
 
     fn get_branik_amount(cash: f32) -> BranikAmount {
         // TODO: get current lowest branik price from the web!
-        const ONE_BRANIK: f32 = 39.9;
         let amount = (cash / ONE_BRANIK) as u32;
         match amount {
             0 => BranikAmount::Pet(0), 
@@ -142,6 +143,7 @@ impl BranikBot {
     async fn post_response(&self, response: &str, comment_id: &str) {
 
         if self.config.post_response {
+            println!("\nPosted response {}\nto comment {}", response, comment_id);
             match  self.reddit_client.comment(response, comment_id).await {
                 Ok(_) => (),
                 Err(_) => ()
@@ -158,7 +160,7 @@ impl BranikBot {
                 Err(e) => println!("Cant open file! {}", e.to_string()),
                 Ok(mut file) => {
                     match file.write_all(response.as_bytes()) {
-                        Ok(_) => println!("Saved response!\n{}", response),
+                        Ok(_) => (),
                         Err(_) => ()
                     }
                 },
@@ -178,18 +180,18 @@ mod tests {
         assert_eq!(response_row, format!("> 20 kc\n\nJe mi to lito, ale to neni ani na jeden 2L Branik ve sleve\n\n"));
         let parse_result = ParseResult {parsed_value: "650kc".to_string(), result_value: 650.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 650kc\n\nTo je dost na 16 2L Branika ve sleve!\n\n"));
+        assert_eq!(response_row, format!("> 650kc\n\nTo je dost na {} 2L Branika ve sleve!\n\n", (650.0 / ONE_BRANIK) as i32));
         let parse_result = ParseResult {parsed_value: "10k".to_string(), result_value: 10000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 10k\n\nTo je dost na 41 baliku 2L Branika ve sleve!\n\n"));
+        assert_eq!(response_row, format!("> 10k\n\nTo je dost na {} baliku 2L Branika ve sleve!\n\n", (10000.0 / ONE_BRANIK / 6.0) as i32));
         let parse_result = ParseResult {parsed_value: "20k".to_string(), result_value: 20000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 20k\n\nTo je dost na vic jak 1 paletu (83 baliku) 2L Branika ve sleve!\n\n"));
+        assert_eq!(response_row, format!("> 20k\n\nTo je dost na vic jak {} paletu ({} baliku) 2L Branika ve sleve!\n\n", (20000.0 / (12.0*8.0*3.0*ONE_BRANIK)) as i32, (20000.0 / ONE_BRANIK / 6.0) as i32));
         let parse_result = ParseResult {parsed_value: "30k".to_string(), result_value: 30000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 30k\n\nTo je dost na vic jak 2 palety (125 baliku) 2L Branika ve sleve!\n\n"));
+        assert_eq!(response_row, format!("> 30k\n\nTo je dost na vic jak {} palety ({} baliku) 2L Branika ve sleve!\n\n", (30000.0 / (12.0*8.0*3.0*ONE_BRANIK)) as i32, (30000.0 / ONE_BRANIK / 6.0) as i32));
         let parse_result = ParseResult {parsed_value: "150k".to_string(), result_value: 150000.0};
         let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 150k\n\nTo je dost na vic jak 13 palet (626 baliku) 2L Branika ve sleve!\n\n"));
+        assert_eq!(response_row, format!("> 150k\n\nTo je dost na vic jak {} palet ({} baliku) 2L Branika ve sleve!\n\n", (150000.0 / (12.0*8.0*3.0*ONE_BRANIK)) as i32, (150000.0 / ONE_BRANIK / 6.0) as i32));
     }
 }

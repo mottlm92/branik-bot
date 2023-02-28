@@ -47,12 +47,22 @@ impl Parser {
                         parsed_value: cap.to_string(),
                         result_value: v
                     };
+                    if Self::value_already_present(&parsed_results, &result) {
+                        continue;
+                    }
                     parsed_results.push(result);
                 } 
                 None => continue
             }
         }
         Some(parsed_results)
+    }
+
+    fn value_already_present(results: &Vec<ParseResult>, result: &ParseResult) -> bool {
+        match results.iter().find(|r| r.result_value == result.result_value) {
+            Some(_) => true,
+            None => false
+        }
     }
 
     fn get_value_from_match(&self, match_str: &str) -> Option<f32> {
@@ -83,7 +93,7 @@ mod tests {
     #[test]
     fn test_parse() {
         let test_parser = Parser::new();
-        let test_data = "Test data for currency detection, 500czk or 600 CZK shouldn't matter, you should also be able to use 6000Kc or 5999kč just as you should be able to use 42 kc or 69 Kč... Last but not least, let's check some shortened values! Like 5k or 2.5k, oh and 2,5k should work as well! What shouldn't work though, is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!";
+        let test_data = "Test data for currency detection, 500czk or 600 CZK shouldn't matter, you should also be able to use 6000Kc or 5999kč just as you should be able to use 42 kc or 69 Kč... Last but not least, let's check some shortened values! Like 5k or 2.5k, oh and 5,5k should work as well! What shouldn't work though, is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!";
         let results = test_parser.parse(test_data).unwrap();
         assert_eq!(results.len(), 10);
     }
@@ -126,7 +136,7 @@ mod tests {
         let true_value = test_parser.get_true_value(value, match_str);
         assert_eq!(value, true_value);
         let value = 1.5;
-        let match_str = "1.5k";
+        let match_str = "1,5k";
         let true_value = test_parser.get_true_value(value, match_str);
         assert_ne!(value, true_value);
         assert_eq!(value * 1000.0, true_value);
@@ -135,5 +145,16 @@ mod tests {
         let true_value = test_parser.get_true_value(value, match_str);
         assert_ne!(value, true_value);
         assert_eq!(value * 1000000.0, true_value);
+    }
+
+    #[test]
+    fn test_duplicate_value() {
+        let mut results: Vec<ParseResult> = vec![];
+        results.push(ParseResult { parsed_value: "20kc".to_string(), result_value: 20.0 });
+        results.push(ParseResult { parsed_value: "200 kc".to_string(), result_value: 200.0 });
+        let is_in = Parser::value_already_present(&results, &ParseResult { parsed_value: "20kc".to_string(), result_value: 20.0 });
+        assert_eq!(is_in, true);
+        let isnt_in = Parser::value_already_present(&results, &ParseResult { parsed_value: "500,-".to_string(), result_value: 500.0 });
+        assert_eq!(isnt_in, false);
     }
 }
