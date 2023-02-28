@@ -1,7 +1,7 @@
 use core::time;
 use std::{thread, fs, io::Write};
 
-use roux::{Reddit, Me, comment::CommentData};
+use roux::{Reddit, Me, comment::CommentData, Subreddit};
 use crate::{parser::{Parser, ParseResult}, comment_reader::CommentReader};
 use super::config::Config;
 
@@ -29,7 +29,7 @@ impl BranikBot {
         let reddit_client = Self::login(&config).await;
         let parser = Parser::new();
         let comment_reader = CommentReader { 
-            subreddit: config.subreddit.to_string(),
+            subreddit: Subreddit::new(&config.subreddit),
             last_comment_storage_path: "./data/last_comment".to_string()
         };
         BranikBot { config, reddit_client, comment_reader, parser }

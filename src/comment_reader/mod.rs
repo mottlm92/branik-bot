@@ -2,14 +2,13 @@ use std::{fs, io::Write};
 use roux::{Subreddit, comment::CommentData};
 
 pub struct CommentReader {
-    pub subreddit: String,
+    pub subreddit: Subreddit,
     pub last_comment_storage_path: String
 }
 
 impl CommentReader {
     pub async fn read_latest_comments(&self) -> Option<Vec<CommentData>> {
-        let subreddit = Subreddit::new(&self.subreddit);
-        let latest_comments = subreddit.latest_comments(None, Some(20)).await.ok()?;
+        let latest_comments = self.subreddit.latest_comments(None, Some(20)).await.ok()?;
         // load last read comment id from file in order to not read it again
         let last_read_comment_id = match self.load_last_read_comment() {
             Some(comment_id) => comment_id,
