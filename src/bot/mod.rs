@@ -1,7 +1,7 @@
 use core::time;
 use std::{thread, fs, io::Write};
 
-use roux::{Reddit, Me, comment::CommentData, Subreddit};
+use roux::{Reddit, Me, comment::CommentData, Subreddit, User};
 use crate::{parser::{Parser, ParseResult}, comment_reader::CommentReader};
 use super::config::Config;
 
@@ -10,6 +10,7 @@ pub struct BranikBot {
     reddit_client: Me,
     comment_reader: CommentReader,
     parser: Parser,
+    user: User
 }
 
 enum BranikAmount {
@@ -32,7 +33,8 @@ impl BranikBot {
             subreddit: Subreddit::new(&config.subreddit),
             last_comment_storage_path: "./data/last_comment".to_string()
         };
-        BranikBot { config, reddit_client, comment_reader, parser }
+        let user = User::new(&config.user_name);
+        BranikBot { config, reddit_client, comment_reader, parser, user }
     }
 
     async fn login(config: &Config) -> Me {
@@ -46,47 +48,85 @@ impl BranikBot {
         } 
     }
 
-    pub async fn run(&self) -> Result<(), ()> {
+    pub async fn run(&self) {
         let mut count = 0;
         loop {
             println!("\nRead new comments!");
-            let comments = self.comment_reader.read_latest_comments().await.ok_or(())?;
-            println!("Found {} new comments!", comments.len());
-            self.parse_comments_and_create_responses(comments).await;
+            match self.comment_reader.read_latest_comments().await {
+                None => {
+                    self.sleep();
+                    continue;
+                },
+                Some(comments) => {
+                    println!("Found {} new comments!", comments.len());
+                    self.parse_comments_and_create_responses(comments).await;
+                }
+            }
             count += 1;
             if count == 12 {
                 break;
             }
-            thread::sleep(time::Duration::from_secs(60 * 5));
-        }
-        Ok(())
-    }
-
-
-async fn parse_comments_and_create_responses(&self, comments: Vec<CommentData>) {
-    for comment in comments.iter() {
-        // lets not react to my own comments here
-        if comment.author.clone().unwrap() == self.config.user_name {
-            continue;
-        }
-        match &comment.body {
-            None => continue,
-            Some(comment_body) => {
-                match &self.parser.parse(&comment_body) {
-                    None => continue,
-                    Some (matches) => {
-                        if matches.len() == 0 {
-                            continue;
-                        }
-                        self.post_response(
-                            &BranikBot::generate_message_for_parse_results(&matches),
-                            &comment.name.clone().unwrap().to_string()).await;
-                    },
-                }
-            },
+            self.sleep(); 
         }
     }
-}
+
+    fn sleep(&self) {
+        thread::sleep(time::Duration::from_secs(60 * 5));
+    }
+
+    async fn load_post_ids_for_posted_comments(&self) -> Vec<String> {
+        let mut post_ids_for_bot_comments: Vec<String> = vec![];
+        match &self.user.comments(
+            Some(roux::util::FeedOption {
+                after: None,
+                before: None,
+                limit: None,
+                count: None,
+                period: Some(roux::util::TimePeriod::Today) 
+            })).await {
+                Ok(comments_from_bot) => {
+                    for comment in comments_from_bot.data.children.iter() {
+                        post_ids_for_bot_comments.push(comment.data.link_id.clone().unwrap());
+                    }
+                },
+                Err(_) => println!("Wasn't able to load comments from bot")
+            }
+        post_ids_for_bot_comments
+    }
+
+    async fn parse_comments_and_create_responses(&self, comments: Vec<CommentData>) {
+        let post_ids_for_posted_comments = self.load_post_ids_for_posted_comments().await;
+        for comment in comments.iter() {
+            // lets not react to my own comments here
+            if comment.author.clone().unwrap() == self.config.user_name {
+                continue;
+            }
+            let comments_on_post_count = post_ids_for_posted_comments.iter()
+                // count current comment "LINK_ID (= post id)" occurencies in bot comments
+                .filter(|pid| pid.to_owned() == &comment.link_id.clone().unwrap_or("".to_string())).count();
+            if comments_on_post_count >= self.config.comments_per_post_limit {
+                println!("Already posted {} comments on this post {}, limit is {}, skipping...",
+                    comments_on_post_count, self.config.comments_per_post_limit, &comment.link_url.clone().unwrap());
+                continue;
+            }
+            match &comment.body {
+                None => continue,
+                Some(comment_body) => {
+                    match &self.parser.parse(&comment_body) {
+                        None => continue,
+                        Some (matches) => {
+                            if matches.len() == 0 {
+                                continue;
+                            }
+                            self.post_response(
+                                &BranikBot::generate_message_for_parse_results(&matches),
+                                &comment.name.clone().unwrap().to_string()).await;
+                        },
+                    }
+                },
+            }
+        }
+    }
 
     fn generate_message_for_parse_results(parse_results: &Vec<ParseResult>) -> String {
         let mut result_message = "".to_string();
@@ -138,6 +178,7 @@ async fn parse_comments_and_create_responses(&self, comments: Vec<CommentData>) 
     }
 
     async fn post_response(&self, response: &str, comment_id: &str) {
+
         if self.config.post_response {
             println!("\nPosted response {}\nto comment {}", response, comment_id);
             let _ = self.reddit_client.comment(response, comment_id).await;
