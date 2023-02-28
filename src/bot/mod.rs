@@ -106,7 +106,7 @@ impl BranikBot {
                 .filter(|pid| pid.to_owned() == &comment.link_id.clone().unwrap_or("".to_string())).count();
             if comments_on_post_count >= self.config.comments_per_post_limit {
                 println!("Already posted {} comments on this post {}, limit is {}, skipping...",
-                    comments_on_post_count, self.config.comments_per_post_limit, &comment.link_url.clone().unwrap());
+                    comments_on_post_count, &comment.link_url.clone().unwrap(), self.config.comments_per_post_limit);
                 continue;
             }
             match &comment.body {
