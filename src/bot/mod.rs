@@ -46,57 +46,54 @@ impl BranikBot {
         } 
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&self) -> Result<(), ()> {
         let mut count = 0;
         loop {
-            println!("Read new comments!");
-            match self.comment_reader.read_latest_comments().await {
-                None => (),
-                Some(comments) => {
-                    println!("Found {} new comments!", comments.len());
-                    self.parse_comments_and_create_responses(comments).await;
-                },
-            }
+            println!("\nRead new comments!");
+            let comments = self.comment_reader.read_latest_comments().await.ok_or(())?;
+            println!("Found {} new comments!", comments.len());
+            self.parse_comments_and_create_responses(comments).await;
             count += 1;
             if count == 12 {
                 break;
             }
             thread::sleep(time::Duration::from_secs(60 * 5));
         }
+        Ok(())
     }
 
 
-    async fn parse_comments_and_create_responses(&self, comments: Vec<CommentData>) {
-        for comment in comments.iter() {
-            // lets not react to my own comments here
-            if comment.author.clone().unwrap() == self.config.user_name {
-                continue;
-            }
-            match &comment.body {
-                None => continue,
-                Some(comment_body) => {
-                    match &self.parser.parse(&comment_body) {
-                        None => continue,
-                        Some (matches) => {
-                            if matches.len() == 0 {
-                                continue;
-                            }
-                            self.post_response(
-                                &BranikBot::generate_message_for_parse_results(&matches),
-                                &comment.name.clone().unwrap().to_string()).await;
-                        },
-                    }
-                },
-            }
+async fn parse_comments_and_create_responses(&self, comments: Vec<CommentData>) {
+    for comment in comments.iter() {
+        // lets not react to my own comments here
+        if comment.author.clone().unwrap() == self.config.user_name {
+            continue;
+        }
+        match &comment.body {
+            None => continue,
+            Some(comment_body) => {
+                match &self.parser.parse(&comment_body) {
+                    None => continue,
+                    Some (matches) => {
+                        if matches.len() == 0 {
+                            continue;
+                        }
+                        self.post_response(
+                            &BranikBot::generate_message_for_parse_results(&matches),
+                            &comment.name.clone().unwrap().to_string()).await;
+                    },
+                }
+            },
         }
     }
+}
 
     fn generate_message_for_parse_results(parse_results: &Vec<ParseResult>) -> String {
         let mut result_message = "".to_string();
         for result in parse_results {
             result_message += &BranikBot::generate_parse_result_row(result);
         }
-        result_message += &format!("\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna. Podnety - Stiznosti - QA na r/branicek)").to_string();
+        result_message += &format!("\n\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna. Podnety - Stiznosti - QA na r/branicek)").to_string();
         result_message
     }
 
@@ -141,15 +138,10 @@ impl BranikBot {
     }
 
     async fn post_response(&self, response: &str, comment_id: &str) {
-
         if self.config.post_response {
             println!("\nPosted response {}\nto comment {}", response, comment_id);
-            match  self.reddit_client.comment(response, comment_id).await {
-                Ok(_) => (),
-                Err(_) => ()
-            };
+            let _ = self.reddit_client.comment(response, comment_id).await;
         }
-
         if self.config.save_response {
             let open_file = fs::OpenOptions::new()
                 .write(true)
@@ -159,10 +151,7 @@ impl BranikBot {
             match open_file {
                 Err(e) => println!("Cant open file! {}", e.to_string()),
                 Ok(mut file) => {
-                    match file.write_all(response.as_bytes()) {
-                        Ok(_) => (),
-                        Err(_) => ()
-                    }
+                    let _ =file.write_all(response.as_bytes()); 
                 },
             }
         }

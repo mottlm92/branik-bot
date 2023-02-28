@@ -9,5 +9,5 @@ pub mod config;
 #[tokio::main]
 async fn main() {
     let bot = BranikBot::respawn().await;
-    bot.run().await;
+    let _ = bot.run().await;
 }
