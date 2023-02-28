@@ -39,41 +39,23 @@ impl Parser {
         let captures = self.main_regex.captures_iter(&binding);
         for cap in captures {
             let cap = &cap[0].trim();
-            let value = self.get_value_from_match(cap);
-            match value {
-                Some(v) => {
-                    let v = self.get_true_value(v, cap);
-                    let result = ParseResult {
-                        parsed_value: cap.to_string(),
-                        result_value: v
-                    };
-                    if Self::value_already_present(&parsed_results, &result) {
-                        continue;
-                    }
-                    parsed_results.push(result);
-                } 
-                None => continue
+            let value = self.get_value_from_match(cap)?;
+            let value = self.get_true_value(value, cap);
+            let result = ParseResult {
+                parsed_value: cap.to_string(),
+                result_value: value
+            };
+            if parsed_results.iter().any(|r| r.result_value == result.result_value) {
+                continue;
             }
+            parsed_results.push(result);
         }
         Some(parsed_results)
     }
 
-    fn value_already_present(results: &Vec<ParseResult>, result: &ParseResult) -> bool {
-        match results.iter().find(|r| r.result_value == result.result_value) {
-            Some(_) => true,
-            None => false
-        }
-    }
-
     fn get_value_from_match(&self, match_str: &str) -> Option<f32> {
         let capture = self.value_regex.captures(&match_str).unwrap();
-        match capture[0].replace(",", ".").parse() {
-            Ok(v) => if v > 0.0 {
-                return Some(v)
-            },
-            Err(_) => return None
-        };
-        None 
+        capture[0].replace(",", ".").parse::<f32>().ok()
     }
 
     fn get_true_value(&self, value: f32, match_str: &str) -> f32 {
@@ -145,16 +127,5 @@ mod tests {
         let true_value = test_parser.get_true_value(value, match_str);
         assert_ne!(value, true_value);
         assert_eq!(value * 1000000.0, true_value);
-    }
-
-    #[test]
-    fn test_duplicate_value() {
-        let mut results: Vec<ParseResult> = vec![];
-        results.push(ParseResult { parsed_value: "20kc".to_string(), result_value: 20.0 });
-        results.push(ParseResult { parsed_value: "200 kc".to_string(), result_value: 200.0 });
-        let is_in = Parser::value_already_present(&results, &ParseResult { parsed_value: "20kc".to_string(), result_value: 20.0 });
-        assert_eq!(is_in, true);
-        let isnt_in = Parser::value_already_present(&results, &ParseResult { parsed_value: "500,-".to_string(), result_value: 500.0 });
-        assert_eq!(isnt_in, false);
     }
 }
