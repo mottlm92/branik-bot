@@ -3,14 +3,21 @@ use std::{thread, fs, io::Write};
 
 use roux::{Reddit, Me, comment::CommentData, Subreddit, User};
 use crate::{parser::{Parser, ParseResult}, comment_reader::CommentReader};
+use self::price_reader::PriceReader;
+
 use super::config::Config;
+
+pub mod price_reader;
 
 pub struct BranikBot {
     config: Config,
     reddit_client: Me,
     comment_reader: CommentReader,
+    price_reader: PriceReader,
     parser: Parser,
-    user: User
+    user: User,
+    needs_update_price: bool,
+    branik_price: f32
 }
 
 enum BranikAmount {
@@ -19,9 +26,10 @@ enum BranikAmount {
     Palett(u32, u32)
 }
 
-const ONE_BRANIK: f32 = 43.9;
-
 impl BranikBot {
+
+    const MAX_CYCLES: i32 = 120;
+
     pub async fn respawn() -> Self {
         let config = match Config::load() {
             Err(_) => panic!("Couldn't respawn BranikBot! Failed to load config file!"),
@@ -29,12 +37,23 @@ impl BranikBot {
         };
         let reddit_client = Self::login(&config).await;
         let parser = Parser::new();
+        let price_reader = PriceReader {};
         let comment_reader = CommentReader { 
             subreddit: Subreddit::new(&config.subreddit),
             last_comment_storage_path: "./data/last_comment".to_string()
         };
         let user = User::new(&config.user_name);
-        BranikBot { config, reddit_client, comment_reader, parser, user }
+        let default_price = config.default_price;
+        BranikBot { 
+            config,
+            reddit_client,
+            comment_reader,
+            parser,
+            user,
+            price_reader,
+            needs_update_price: true,
+            branik_price: default_price
+        }
     }
 
     async fn login(config: &Config) -> Me {
@@ -48,9 +67,13 @@ impl BranikBot {
         } 
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&mut self) {
         let mut count = 0;
         loop {
+            if self.needs_update_price {
+                self.update_price().await;
+                println!("Price updated!");
+            }
             println!("\nRead new comments!");
             match self.comment_reader.read_latest_comments().await {
                 None => {
@@ -63,7 +86,9 @@ impl BranikBot {
                 }
             }
             count += 1;
-            if count == 12 {
+            self.needs_update_price = count % 12 == 0;
+            println!("Cycle compeleted, {} cycles left", Self::MAX_CYCLES - count);
+            if count == Self::MAX_CYCLES {
                 break;
             }
             self.sleep(); 
@@ -72,6 +97,16 @@ impl BranikBot {
 
     fn sleep(&self) {
         thread::sleep(time::Duration::from_secs(60 * 5));
+    }
+
+    async fn update_price(&mut self) {
+        println!("Update price!");
+        let price = if let Ok(p) = self.price_reader.load_and_parse_branik_price(self.config.default_price).await {
+            p
+        } else {
+            self.config.default_price
+        };
+        self.branik_price = price;
     }
 
     async fn load_post_ids_for_posted_comments(&self) -> Vec<String> {
@@ -119,7 +154,7 @@ impl BranikBot {
                                 continue;
                             }
                             self.post_response(
-                                &BranikBot::generate_message_for_parse_results(&matches),
+                                &self.generate_message_for_parse_results(&matches),
                                 &comment.name.clone().unwrap().to_string()).await;
                         },
                     }
@@ -128,18 +163,18 @@ impl BranikBot {
         }
     }
 
-    fn generate_message_for_parse_results(parse_results: &Vec<ParseResult>) -> String {
+    fn generate_message_for_parse_results(&self, parse_results: &Vec<ParseResult>) -> String {
         let mut result_message = "".to_string();
         for result in parse_results {
-            result_message += &BranikBot::generate_parse_result_row(result);
+            result_message += &self.generate_parse_result_row(result);
         }
         result_message += &format!("\n\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna. Podnety - Stiznosti - QA na r/branicek)").to_string();
         result_message
     }
 
-    fn generate_parse_result_row(parse_result: &ParseResult) -> String {
+    fn generate_parse_result_row(&self, parse_result: &ParseResult) -> String {
         let row = format!("> {}\n\n", parse_result.parsed_value);
-        match BranikBot::get_branik_amount(parse_result.result_value) {
+        match self.get_branik_amount(parse_result.result_value) {
             BranikAmount::Pet(amount) => {
                 if amount == 0 {
                     format!("{}Je mi to lito, ale to neni ani na jeden 2L Branik ve sleve\n\n", row)
@@ -164,9 +199,9 @@ impl BranikBot {
         }
     }
 
-    fn get_branik_amount(cash: f32) -> BranikAmount {
+    fn get_branik_amount(&self, cash: f32) -> BranikAmount {
         // TODO: get current lowest branik price from the web!
-        let amount = (cash / ONE_BRANIK) as u32;
+        let amount = (cash / self.branik_price) as u32;
         match amount {
             0 => BranikAmount::Pet(0), 
             // 144 = half of a palett
@@ -203,25 +238,29 @@ impl BranikBot {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_result_row() {
+    #[tokio::test]
+    async fn test_result_row() {
+
+        let test_bot = BranikBot ::respawn().await;
+
+
         let parse_result = ParseResult {parsed_value: "20 kc".to_string(), result_value: 20.0};
-        let response_row = BranikBot::generate_parse_result_row(&parse_result);
+        let response_row = test_bot.generate_parse_result_row(&parse_result);
         assert_eq!(response_row, format!("> 20 kc\n\nJe mi to lito, ale to neni ani na jeden 2L Branik ve sleve\n\n"));
         let parse_result = ParseResult {parsed_value: "650kc".to_string(), result_value: 650.0};
-        let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 650kc\n\nTo je dost na {} 2L Branika ve sleve!\n\n", (650.0 / ONE_BRANIK) as i32));
+        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        assert_eq!(response_row, format!("> 650kc\n\nTo je dost na {} 2L Branika ve sleve!\n\n", (650.0 / test_bot.config.default_price) as i32));
         let parse_result = ParseResult {parsed_value: "10k".to_string(), result_value: 10000.0};
-        let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 10k\n\nTo je dost na {} baliku 2L Branika ve sleve!\n\n", (10000.0 / ONE_BRANIK / 6.0) as i32));
+        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        assert_eq!(response_row, format!("> 10k\n\nTo je dost na {} baliku 2L Branika ve sleve!\n\n", (10000.0 / test_bot.config.default_price / 6.0) as i32));
         let parse_result = ParseResult {parsed_value: "20k".to_string(), result_value: 20000.0};
-        let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 20k\n\nTo je dost na vic jak {} paletu ({} baliku) 2L Branika ve sleve!\n\n", (20000.0 / (12.0*8.0*3.0*ONE_BRANIK)) as i32, (20000.0 / ONE_BRANIK / 6.0) as i32));
+        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        assert_eq!(response_row, format!("> 20k\n\nTo je dost na vic jak {} paletu ({} baliku) 2L Branika ve sleve!\n\n", (20000.0 / (12.0*8.0*3.0*test_bot.config.default_price)) as i32, (20000.0 / test_bot.config.default_price / 6.0) as i32));
         let parse_result = ParseResult {parsed_value: "30k".to_string(), result_value: 30000.0};
-        let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 30k\n\nTo je dost na vic jak {} palety ({} baliku) 2L Branika ve sleve!\n\n", (30000.0 / (12.0*8.0*3.0*ONE_BRANIK)) as i32, (30000.0 / ONE_BRANIK / 6.0) as i32));
+        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        assert_eq!(response_row, format!("> 30k\n\nTo je dost na vic jak {} palety ({} baliku) 2L Branika ve sleve!\n\n", (30000.0 / (12.0*8.0*3.0*test_bot.config.default_price)) as i32, (30000.0 / test_bot.config.default_price / 6.0) as i32));
         let parse_result = ParseResult {parsed_value: "150k".to_string(), result_value: 150000.0};
-        let response_row = BranikBot::generate_parse_result_row(&parse_result);
-        assert_eq!(response_row, format!("> 150k\n\nTo je dost na vic jak {} palet ({} baliku) 2L Branika ve sleve!\n\n", (150000.0 / (12.0*8.0*3.0*ONE_BRANIK)) as i32, (150000.0 / ONE_BRANIK / 6.0) as i32));
+        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        assert_eq!(response_row, format!("> 150k\n\nTo je dost na vic jak {} palet ({} baliku) 2L Branika ve sleve!\n\n", (150000.0 / (12.0*8.0*3.0*test_bot.config.default_price)) as i32, (150000.0 / test_bot.config.default_price / 6.0) as i32));
     }
 }

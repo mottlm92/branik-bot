@@ -12,7 +12,10 @@ impl CommentReader {
         // load last read comment id from file in order to not read it again
         let last_read_comment_id = match self.load_last_read_comment() {
             Some(comment_id) => comment_id,
-            None => "".to_string()
+            None =>  {
+                println!("Failed to load last comment id");
+                "".to_string()
+            }
         }; 
         let mut result: Vec<CommentData> =  vec![];
         for comment in latest_comments.data.children {

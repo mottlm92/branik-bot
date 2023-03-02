@@ -8,6 +8,7 @@ pub struct Config {
     pub password: String,
     pub subreddit: String,
     pub comments_per_post_limit: usize,
+    pub default_price: f32,
     pub post_response: bool,
     pub save_response: bool
 }
@@ -32,8 +33,9 @@ impl Config {
             password: config_lines.next().expect("Expected to have password on index 4 in the config!").to_string(),
             subreddit: config_lines.next().expect("Expected to have subreddit on index 4 in the config!").to_string(),
             comments_per_post_limit: config_lines.next().expect("Expected to have comments per post limit on index 5 in the config").parse().expect("Expected int here"),
-            post_response: config_lines.next().expect("Expected to have post response? (true/false) on index 6 in the config!").to_string() == "true",
-            save_response: config_lines.next().expect("Expected to have save response? (true/false) on index 7 in the config!").to_string() == "true",
+            default_price: config_lines.next().expect("Expected to have default price on index 6 in the config!").parse::<f32>().expect("(float) XX.XX "),
+            post_response: config_lines.next().expect("Expected to have post response? (true/false) on index 7 in the config!").to_string() == "true",
+            save_response: config_lines.next().expect("Expected to have save response? (true/false) on index 8 in the config!").to_string() == "true",
         }
     }
 }
