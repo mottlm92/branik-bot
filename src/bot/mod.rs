@@ -11,7 +11,7 @@ pub mod price_reader;
 
 pub struct BranikBot {
     config: Config,
-    reddit_client: Me,
+    reddit_client: Option<Me>,
     comment_reader: CommentReader,
     price_reader: PriceReader,
     parser: Parser,
@@ -53,14 +53,19 @@ impl BranikBot {
         }
     }
 
-    async fn login(config: &Config) -> Me {
+    async fn login(config: &Config) -> Option<Me> { 
         let client = Reddit::new(&config.user_agent, &config.client_id, &config.client_secret)
             .username(&config.user_name)
             .password(&config.password)
             .login().await;
         match client {
-            Err(_) => panic!("Couldn't login to reddit!"),
-            Ok(me) => me
+            Err(_) => {
+                if config.post_response {
+                    panic!("Couldn't login to reddit and POST_RESPONSE is set to true");
+                }
+                None
+            },
+            Ok(me) => Some(me)
         } 
     }
 
@@ -141,22 +146,21 @@ impl BranikBot {
                     comments_on_post_count, &comment.link_url.clone().unwrap(), self.config.comments_per_post_limit);
                 continue;
             }
-            match &comment.body {
-                None => continue,
-                Some(comment_body) => {
-                    match &self.parser.parse(&comment_body) {
-                        None => continue,
-                        Some (matches) => {
-                            if matches.len() == 0 {
-                                continue;
-                            }
-                            self.post_response(
-                                &self.generate_message_for_parse_results(&matches),
-                                &comment.name.clone().unwrap().to_string()).await;
-                        },
-                    }
-                },
-            }
+            let comment_body = if let Some(cb) = &comment.body {
+                cb
+            } else {
+                // No comment body - nothing to parse
+                continue;
+            };
+            let matches = if let Some(m) = self.parser.parse(&comment_body) {
+                m
+            } else {
+                // No matches in comment
+                continue;
+            };
+            self.post_response(
+                &self.generate_message_for_parse_results(&matches),
+                &comment.name.clone().unwrap().to_string()).await;
         }
     }
 
@@ -210,10 +214,9 @@ impl BranikBot {
     }
 
     async fn post_response(&self, response: &str, comment_id: &str) {
-
         if self.config.post_response {
             println!("\nPosted response {}\nto comment {}", response, comment_id);
-            let _ = self.reddit_client.comment(response, comment_id).await;
+            let _ = self.reddit_client.as_ref().expect("Expected reddit client being logged in").comment(response, comment_id).await;
         }
         if self.config.save_response {
             let open_file = fs::OpenOptions::new()
@@ -239,7 +242,6 @@ mod tests {
     async fn test_result_row() {
 
         let test_bot = BranikBot ::respawn().await;
-
 
         let parse_result = ParseResult {parsed_value: "20 kc".to_string(), result_value: 20.0};
         let response_row = test_bot.generate_parse_result_row(&parse_result);
