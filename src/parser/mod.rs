@@ -41,6 +41,9 @@ impl Parser {
             let cap = &cap[0].trim();
             let value = self.get_value_from_match(cap)?;
             let value = self.get_true_value(value, cap);
+            if value == 0.0 {
+                continue;
+            }
             let result = ParseResult {
                 parsed_value: cap.to_string(),
                 result_value: value
@@ -83,7 +86,7 @@ mod tests {
     #[test]
     fn test_parse_unit() {
         let test_parser = Parser::new();
-        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not! also add 60 kc and 100kc";
+        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not! also add 60 kc and 100kc TODO: this is skipped for now, but should be implemented 3 000 kc";
         let results = test_parser.parse(test_data).unwrap();
         assert_eq!(results.len(), 6);
         let result = &results[0];

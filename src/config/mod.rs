@@ -14,12 +14,25 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Result<Config, ()> {
+    pub fn load() -> Config {
         match fs::read_to_string("./.config") {
-            Err(_) => Err(()),
-            Ok(text) => {
-                Ok(Self::read_config_file(&text))
-            } 
+            Err(_) => Config::create_default_config(),
+            Ok(text) => Self::read_config_file(&text)
+        }
+    }
+
+    fn create_default_config() -> Self {
+        Config { 
+            user_agent: "USER_AGENT".to_string(),
+            client_id: "CLIENT_ID".to_string(),
+            client_secret: "CLIENT_SECRET".to_string(),
+            user_name: "USER_NAME".to_string(),
+            password: "PASSWORD".to_string(),
+            subreddit: "SUBREDDIT".to_string(),
+            comments_per_post_limit: 3,
+            default_price: 39.90,
+            post_response: false,
+            save_response: false
         }
     }
 
@@ -34,8 +47,8 @@ impl Config {
             subreddit: config_lines.next().expect("Expected to have subreddit on index 4 in the config!").to_string(),
             comments_per_post_limit: config_lines.next().expect("Expected to have comments per post limit on index 5 in the config").parse().expect("Expected int here"),
             default_price: config_lines.next().expect("Expected to have default price on index 6 in the config!").parse::<f32>().expect("(float) XX.XX "),
-            post_response: config_lines.next().expect("Expected to have post response? (true/false) on index 7 in the config!").to_string() == "true",
-            save_response: config_lines.next().expect("Expected to have save response? (true/false) on index 8 in the config!").to_string() == "true",
+            post_response: config_lines.next().expect("Expected to have post response? on index 7 in the config!").to_string().parse::<bool>().expect("Expected (true/false)"),
+            save_response: config_lines.next().expect("Expected to have save response? on index 8 in the config!").parse::<bool>().expect("Expected (true/false)"),
         }
     }
 }

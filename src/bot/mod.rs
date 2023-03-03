@@ -31,10 +31,7 @@ impl BranikBot {
     const MAX_CYCLES: i32 = 120;
 
     pub async fn respawn() -> Self {
-        let config = match Config::load() {
-            Err(_) => panic!("Couldn't respawn BranikBot! Failed to load config file!"),
-            Ok(c) => c
-        };
+        let config = Config::load();
         let reddit_client = Self::login(&config).await;
         let parser = Parser::new();
         let price_reader = PriceReader {};
