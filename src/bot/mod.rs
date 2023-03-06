@@ -201,7 +201,6 @@ impl BranikBot {
     }
 
     fn get_branik_amount(&self, cash: f32) -> BranikAmount {
-        // TODO: get current lowest branik price from the web!
         let amount = (cash / self.branik_price) as u32;
         match amount {
             0 => BranikAmount::Pet(0), 

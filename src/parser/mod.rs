@@ -22,8 +22,8 @@ impl Display for ParseResult {
 impl Parser {
     pub fn new() -> Parser {
         let parser = Parser {
-            main_regex: Regex::new(r"( |^)((\d+[ ]?(kc|kč|czk|mega))|(\d+[,.]?\d+(k))|(\d+[k]))+(\b)|(\d+(,-))").unwrap(),
-            value_regex: Regex::new(r"\d*[,|.]\d+|\d+").unwrap(),
+            main_regex: Regex::new(r"( |^)(((\d+[ ,.]?)+?(kc|kč|czk|mega|korun))|(\d+[,.]?\d+(k))|(\d+[k]))+(\b)|((\d+[ .|,]?)+(,-))").unwrap(),
+            value_regex: Regex::new(r"(\d+[ ,.]?)+(\d+)?").unwrap(),
             unit_regex: Regex::new(r"([\p{L}+]+)|(mega)|(,-)").unwrap()
         };
         parser
@@ -53,12 +53,21 @@ impl Parser {
             }
             parsed_results.push(result);
         }
+        if parsed_results.len() == 0 {
+            return None;
+        }
         Some(parsed_results)
     }
 
     fn get_value_from_match(&self, match_str: &str) -> Option<f32> {
         let capture = self.value_regex.captures(&match_str).unwrap();
-        capture[0].replace(",", ".").parse::<f32>().ok()
+        if match_str.ends_with("k") || match_str.ends_with("mega") {
+            // if value doesn't end with exact unit only remove whitespace
+            capture[0].replace(",", ".").replace(" ", "").parse::<f32>().ok()
+        } else {
+            // if value ends with remove all punctuation and whitespace
+            capture[0].replace(",", "").replace(" ", "").replace(".", "").parse::<f32>().ok()
+        }
     }
 
     fn get_true_value(&self, value: f32, match_str: &str) -> f32 {
@@ -78,7 +87,9 @@ mod tests {
     #[test]
     fn test_parse() {
         let test_parser = Parser::new();
-        let test_data = "Test data for currency detection, 500czk or 600 CZK shouldn't matter, you should also be able to use 6000Kc or 5999kč just as you should be able to use 42 kc or 69 Kč... Last but not least, let's check some shortened values! Like 5k or 2.5k, oh and 5,5k should work as well! What shouldn't work though, is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!";
+        let test_data = "Test data for currency detection, 500czk or 600 CZK shouldn't matter, you should also be able to use 6000Kc or 5999kč just as you should be able to use 42 kc or 69 Kč...
+                         Last but not least, let's check some shortened values! Like 5k or 2.5k, oh and 5,5k should work as well! What shouldn't work though,
+                         is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!";
         let results = test_parser.parse(test_data).unwrap();
         assert_eq!(results.len(), 10);
     }
@@ -86,9 +97,10 @@ mod tests {
     #[test]
     fn test_parse_unit() {
         let test_parser = Parser::new();
-        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not! also add 60 kc and 100kc TODO: this is skipped for now, but should be implemented 3 000 kc";
+        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored..
+But 2 mega should not! also add 60 kc and 100kc, but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 000 000 czk what about like 3.5 mega?";
         let results = test_parser.parse(test_data).unwrap();
-        assert_eq!(results.len(), 6);
+        assert_eq!(results.len(), 11);
         let result = &results[0];
         assert_eq!("200k", result.parsed_value);
         assert_eq!(200000.0, result.result_value);
@@ -107,6 +119,21 @@ mod tests {
         let result = &results[5];
         assert_eq!("100kc", result.parsed_value);
         assert_eq!(100.0, result.result_value);
+        let result = &results[6];
+        assert_eq!("3 000 kc", result.parsed_value);
+        assert_eq!(3000.0, result.result_value);
+        let result = &results[7];
+        assert_eq!("1.900,-", result.parsed_value);
+        assert_eq!(1900.0, result.result_value);
+        let result = &results[8];
+        assert_eq!("3.000.000 kc", result.parsed_value);
+        assert_eq!(3000000.0, result.result_value);
+        let result = &results[9];
+        assert_eq!("6 000 000 czk", result.parsed_value);
+        assert_eq!(6000000.0, result.result_value);
+        let result = &results[10];
+        assert_eq!("3.5 mega", result.parsed_value);
+        assert_eq!(3500000.0, result.result_value);
     }
 
     #[test]
@@ -130,5 +157,25 @@ mod tests {
         let true_value = test_parser.get_true_value(value, match_str);
         assert_ne!(value, true_value);
         assert_eq!(value * 1000000.0, true_value);
+        let value = 3000.0;
+        let match_str = "3 000 kc";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_eq!(value, true_value);
+        let value = 1900.0;
+        let match_str = "1.900,-";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_eq!(value, true_value);
+        let value = 3000000.0;
+        let match_str = "3.000.000 kc";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_eq!(value, true_value);
+        let value = 6000000.0;
+        let match_str = "6 000 000 czk";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_eq!(value, true_value);
+        let value = 69420.0;
+        let match_str = "69.420kc";
+        let true_value = test_parser.get_true_value(value, match_str);
+        assert_eq!(value, true_value);
     }
 }
