@@ -89,18 +89,18 @@ mod tests {
         let test_parser = Parser::new();
         let test_data = "Test data for currency detection, 500czk or 600 CZK shouldn't matter, you should also be able to use 6000Kc or 5999kč just as you should be able to use 42 kc or 69 Kč...
                          Last but not least, let's check some shortened values! Like 5k or 2.5k, oh and 5,5k should work as well! What shouldn't work though,
-                         is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!";
+                         is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!, 30 - 50 kč";
         let results = test_parser.parse(test_data).unwrap();
-        assert_eq!(results.len(), 10);
+        assert_eq!(results.len(), 11);
     }
 
     #[test]
     fn test_parse_unit() {
         let test_parser = Parser::new();
-        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored..
-But 2 mega should not! also add 60 kc and 100kc, but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 000 000 czk what about like 3.5 mega?";
+        let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not! also add 60 kc and 100kc,
+                         but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 000 000 czk what about like 3.5 mega? 30 - 50 kč";
         let results = test_parser.parse(test_data).unwrap();
-        assert_eq!(results.len(), 11);
+        assert_eq!(results.len(), 12);
         let result = &results[0];
         assert_eq!("200k", result.parsed_value);
         assert_eq!(200000.0, result.result_value);
@@ -134,6 +134,9 @@ But 2 mega should not! also add 60 kc and 100kc, but should be implemented 3 000
         let result = &results[10];
         assert_eq!("3.5 mega", result.parsed_value);
         assert_eq!(3500000.0, result.result_value);
+        let result = &results[11];
+        assert_eq!("50 kč", result.parsed_value);
+        assert_eq!(50.0, result.result_value);
     }
 
     #[test]
