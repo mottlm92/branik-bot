@@ -91,15 +91,17 @@ impl BranikBot {
                 }
             }
             count += 1;
-            self.needs_update_price = count % 12 == 0;
             if max_cycles > 0 {
-                println!("Cycle compeleted, {} cycles left", max_cycles - count);
+                println!("Cycle completed, {} cycles left", max_cycles - count);
             } else {
-                println!("Cycle compeleted");
+                println!("{} cycles completed.", count);
             }
             if count == max_cycles {
                 break;
             }
+            // TODO: better logic for this - update before each cycle right after midnight,
+            // no need to update so often
+            self.needs_update_price = count % 12 == 0;
             self.sleep(); 
         }
     }
@@ -162,27 +164,38 @@ impl BranikBot {
             let matches = if let Some(m) = self.parser.parse(&comment_body) {
                 m
             } else {
-                // No matches in comment
+                // No matches in comment 
                 continue;
             };
             self.post_response(
-                &self.generate_message_for_parse_results(&matches),
+                &self.generate_message_for_results(&matches),
                 &comment.name.clone().unwrap().to_string()).await;
         }
     }
 
-    fn generate_message_for_parse_results(&self, parse_results: &Vec<ParseResult>) -> String {
+    fn generate_message_for_results(&self, parse_results: &Vec<ParseResult>) -> String {
         let mut result_message = "".to_string();
         for result in parse_results {
-            result_message += &self.generate_parse_result_row(result);
+            result_message += &self.generate_result_row(result);
         }
         result_message += &format!("\n\n^(Jsem bot, doufam, ze poskytnuta informace byla uzitecna. Podnety - Stiznosti - QA na r/branicek)").to_string();
         result_message
     }
 
-    fn generate_parse_result_row(&self, parse_result: &ParseResult) -> String {
-        let row = format!("> {}\n\n", parse_result.parsed_value);
-        match self.get_branik_amount(parse_result.result_value) {
+    fn generate_result_row(&self, parse_result: &ParseResult) -> String {
+        match parse_result {
+            ParseResult::Keyword => self.generate_keyword_result_row(),
+            ParseResult::Value(parsed_value, result_value) => self.generate_value_result_row(parsed_value, *result_value)
+        }
+    }
+
+    fn generate_keyword_result_row(&self) -> String {
+        format!("Dvoulitrovka Branika ve sleve aktualne stoji {} korun.", self.branik_price)
+    }
+
+    fn generate_value_result_row(&self, parsed_value: &String, parsed_result: f32) -> String {
+        let row = format!("> {}\n\n", parsed_value);
+        match self.get_branik_amount(parsed_result) {
             BranikAmount::Pet(amount) => {
                 if amount == 0 {
                     format!("{}Je mi to lito, ale to neni ani na jednu dvoulitrovku Branika ve sleve.\n\n", row)
@@ -237,7 +250,11 @@ impl BranikBot {
     async fn post_response(&self, response: &str, comment_id: &str) {
         if self.config.post_response {
             println!("\nPosted response {}\nto comment {}", response, comment_id);
-            let _ = self.reddit_client.as_ref().expect("Expected reddit client being logged in").comment(response, comment_id).await;
+            let r = self.reddit_client.as_ref().expect("Expected reddit client being logged in").comment(response, comment_id).await;
+            match r {
+                Ok(_) => (),
+                Err(err_response) => println!("Error posting response {}", err_response.to_string())
+            }
         }
         if self.config.save_response {
             let open_file = fs::OpenOptions::new()
@@ -248,7 +265,7 @@ impl BranikBot {
             match open_file {
                 Err(e) => println!("Cant open file! {}", e.to_string()),
                 Ok(mut file) => {
-                    let _ =file.write_all(response.as_bytes()); 
+                    let _ = file.write_all(response.as_bytes()); 
                 },
             }
         }
@@ -264,29 +281,29 @@ mod tests {
 
         let test_bot = BranikBot ::respawn().await;
 
-        let parse_result = ParseResult {parsed_value: "20 kc".to_string(), result_value: 20.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value( "20 kc".to_string(), 20.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 20 kc\n\nJe mi to lito, ale to neni ani na jednu dvoulitrovku Branika ve sleve.\n\n"));
-        let parse_result = ParseResult {parsed_value: "50kc".to_string(), result_value: 50.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value( "50kc".to_string(), 50.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 50kc\n\n{}{} dvoulitrovku {}\n\n", BranikBot::RESPONSE_PREFIX, (50.0 / test_bot.config.default_price) as i32, BranikBot::RESPONSE_SUFFIX));
-        let parse_result = ParseResult {parsed_value: "150kc".to_string(), result_value: 150.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value( "150kc".to_string(), 150.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 150kc\n\n{}{} dvoulitrovky {}\n\n", BranikBot::RESPONSE_PREFIX, (150.0 / test_bot.config.default_price) as i32, BranikBot::RESPONSE_SUFFIX));
-        let parse_result = ParseResult {parsed_value: "650kc".to_string(), result_value: 650.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value( "650kc".to_string(), 650.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 650kc\n\n{}{} dvoulitrovek {}\n\n", BranikBot::RESPONSE_PREFIX, (650.0 / test_bot.config.default_price) as i32, BranikBot::RESPONSE_SUFFIX));
-        let parse_result = ParseResult {parsed_value: "10k".to_string(), result_value: 10000.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value("10k".to_string(), 10000.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 10k\n\n{}{} baliku dvoulitrovek {}\n\n", BranikBot::RESPONSE_PREFIX, (10000.0 / test_bot.config.default_price / 6.0) as i32, BranikBot::RESPONSE_SUFFIX));
-        let parse_result = ParseResult {parsed_value: "20k".to_string(), result_value: 20000.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value( "20k".to_string(), 20000.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 20k\n\n{}vic jak {} paletu ({} baliku) dvoulitrovek {}\n\n", BranikBot::RESPONSE_PREFIX, (20000.0 / (12.0*8.0*3.0*test_bot.config.default_price)) as i32, (20000.0 / test_bot.config.default_price / 6.0) as i32, BranikBot::RESPONSE_SUFFIX));
-        let parse_result = ParseResult {parsed_value: "30k".to_string(), result_value: 30000.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value("30k".to_string(), 30000.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 30k\n\n{}vic jak {} palety ({} baliku) dvoulitrovek {}\n\n", BranikBot::RESPONSE_PREFIX, (30000.0 / (12.0*8.0*3.0*test_bot.config.default_price)) as i32, (30000.0 / test_bot.config.default_price / 6.0) as i32, BranikBot::RESPONSE_SUFFIX));
-        let parse_result = ParseResult {parsed_value: "150k".to_string(), result_value: 150000.0};
-        let response_row = test_bot.generate_parse_result_row(&parse_result);
+        let parse_result = ParseResult::Value("150k".to_string(), 150000.0);
+        let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 150k\n\n{}vic jak {} palet ({} baliku) dvoulitrovek {}\n\n", BranikBot::RESPONSE_PREFIX, (150000.0 / (12.0*8.0*3.0*test_bot.config.default_price)) as i32, (150000.0 / test_bot.config.default_price / 6.0) as i32, BranikBot::RESPONSE_SUFFIX));
     }
 }

@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use regex::Regex;
 
 pub struct Parser {
@@ -8,14 +6,30 @@ pub struct Parser {
     unit_regex: Regex,
 }
 
-pub struct ParseResult {
-    pub parsed_value: String,
-    pub result_value: f32,
+pub enum ParseResult {
+    // parsed some cash value
+    Value(String, f32),
+    // no cash value, keyword detected
+    Keyword
 }
 
-impl Display for ParseResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "ParseResult - value {} extracted from {}", self.result_value, self.parsed_value)
+impl PartialEq for ParseResult {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            ParseResult::Value(_, value) => {
+                match other {
+                    ParseResult::Keyword => false,
+                    // texts don't need to match, we only care about value
+                    ParseResult::Value(_, other_value) => other_value == value
+                }
+            }
+            ParseResult::Keyword => {
+                match other {
+                    ParseResult::Keyword => true,
+                    ParseResult::Value(_, _) => false
+                }
+            }
+        }
     }
 }
 
@@ -29,11 +43,24 @@ impl Parser {
         parser
     }
 
+    const KEYWORDS: [&str; 6] = [
+        "branik",
+        "braník",
+        "bráník",
+        "branicek",
+        "braníček",
+        "bráníček"];
+
     pub fn parse(&self, text: &str) -> Option<Vec<ParseResult>> {
         let binding = text.to_lowercase();
         let is_match = self.main_regex.is_match(&binding);
+        // no value in the text
         if !is_match {
-            return None;
+            // check for keywords
+            match Self::check_for_keyword(text) {
+                false => return None,
+                true => return Some(vec![ParseResult::Keyword])
+            }
         }
         let mut parsed_results: Vec<ParseResult> = vec![];
         let captures = self.main_regex.captures_iter(&binding);
@@ -44,11 +71,8 @@ impl Parser {
             if value == 0.0 {
                 continue;
             }
-            let result = ParseResult {
-                parsed_value: cap.to_string(),
-                result_value: value
-            };
-            if parsed_results.iter().any(|r| r.result_value == result.result_value) {
+            let result = ParseResult::Value(cap.to_string(), value);
+            if parsed_results.iter().any(|r| r == &result) {
                 continue;
             }
             parsed_results.push(result);
@@ -57,6 +81,10 @@ impl Parser {
             return None;
         }
         Some(parsed_results)
+    }
+
+    fn check_for_keyword(text: &str) -> bool {
+        text.split(" ").any(|word| Self::KEYWORDS.contains(&word))
     }
 
     fn get_value_from_match(&self, match_str: &str) -> Option<f32> {
@@ -88,55 +116,63 @@ mod tests {
     fn test_parse() {
         let test_parser = Parser::new();
         let test_data = "Test data for currency detection, 500czk or 600 CZK shouldn't matter, you should also be able to use 6000Kc or 5999kč just as you should be able to use 42 kc or 69 Kč...
-                         Last but not least, let's check some shortened values! Like 5k or 2.5k, oh and 5,5k should work as well! What shouldn't work though,
-                         is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!, 30 - 50 kč";
+Last but not least, let's check some shortened values! Like 5k or 2.5k, oh and 5,5k should work as well! What shouldn't work though,
+is just loose numbers like 69420 without any currency specification, same with like this range 9-5, time 10PM or 9 AM but this 100,- should get captured!, 30 - 50 kč";
         let results = test_parser.parse(test_data).unwrap();
         assert_eq!(results.len(), 11);
+        let test_data = "Some text without any value or keyword";
+        let results = test_parser.parse(test_data);
+        assert_eq!(true, results.is_none());
+        let test_data = "Some text without any value, but containing branicek keyword";
+        let results = test_parser.parse(test_data);
+        assert_eq!(true, results.is_some());
+        let results = results.unwrap();
+        assert_eq!(1, results.len());
     }
 
     #[test]
-    fn test_parse_unit() {
+    fn test_parse_unit_from_value_result() {
         let test_parser = Parser::new();
         let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not! also add 60 kc and 100kc,
-                         but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 000 000 czk what about like 3.5 mega? 30 - 50 kč";
+but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 000 000 czk what about like 3.5 mega? 30 - 50 kč";
         let results = test_parser.parse(test_data).unwrap();
         assert_eq!(results.len(), 12);
-        let result = &results[0];
-        assert_eq!("200k", result.parsed_value);
-        assert_eq!(200000.0, result.result_value);
-        let result = &results[1];
-        assert_eq!("1.5k", result.parsed_value);
-        assert_eq!(1500.0, result.result_value);
-        let result = &results[2];
-        assert_eq!("6,9k", result.parsed_value);
-        assert_eq!(6900.0, result.result_value);
-        let result = &results[3];
-        assert_eq!("2 mega", result.parsed_value);
-        assert_eq!(2000000.0, result.result_value);
-        let result = &results[4];
-        assert_eq!("60 kc", result.parsed_value);
-        assert_eq!(60.0, result.result_value);
-        let result = &results[5];
-        assert_eq!("100kc", result.parsed_value);
-        assert_eq!(100.0, result.result_value);
-        let result = &results[6];
-        assert_eq!("3 000 kc", result.parsed_value);
-        assert_eq!(3000.0, result.result_value);
-        let result = &results[7];
-        assert_eq!("1.900,-", result.parsed_value);
-        assert_eq!(1900.0, result.result_value);
-        let result = &results[8];
-        assert_eq!("3.000.000 kc", result.parsed_value);
-        assert_eq!(3000000.0, result.result_value);
-        let result = &results[9];
-        assert_eq!("6 000 000 czk", result.parsed_value);
-        assert_eq!(6000000.0, result.result_value);
-        let result = &results[10];
-        assert_eq!("3.5 mega", result.parsed_value);
-        assert_eq!(3500000.0, result.result_value);
-        let result = &results[11];
-        assert_eq!("50 kč", result.parsed_value);
-        assert_eq!(50.0, result.result_value);
+        let ParseResult::Value(str, value) = &results[0] else {panic!()};
+        assert_eq!("200k", str);
+        assert_eq!(200000.0, *value);
+        let ParseResult::Value(str, value) = &results[1] else {panic!()};
+        assert_eq!("1.5k", str);
+        assert_eq!(1500.0, *value);
+        let ParseResult::Value(str, value) = &results[2] else {panic!()};
+        assert_eq!("6,9k", str);
+        assert_eq!(6900.0, *value);
+        let ParseResult::Value(str, value) = &results[3] else {panic!()};
+        assert_eq!("2 mega", str);
+        assert_eq!(2000000.0, *value);
+        let ParseResult::Value(str, value) = &results[4] else {panic!()};
+        assert_eq!("60 kc", str);
+        assert_eq!(60.0, *value);
+        let ParseResult::Value(str, value) = &results[5] else {panic!()};
+        assert_eq!("100kc", str);
+        assert_eq!(100.0, *value);
+        let ParseResult::Value(str, value) = &results[6] else {panic!()};
+        assert_eq!("3 000 kc", str);
+        assert_eq!(3000.0, *value);
+        let ParseResult::Value(str, value) = &results[7] else {panic!()};
+        assert_eq!("1.900,-", str);
+        assert_eq!(1900.0, *value);
+        let ParseResult::Value(str, value) = &results[8] else {panic!()};
+        assert_eq!("3.000.000 kc", str);
+        assert_eq!(3000000.0, *value);
+        let ParseResult::Value(str, value) = &results[9] else {panic!()};
+        assert_eq!("6 000 000 czk", str);
+        assert_eq!(6000000.0, *value);
+        let ParseResult::Value(str, value) = &results[10] else {panic!()};
+        assert_eq!("3.5 mega", str);
+        assert_eq!(3500000.0, *value);
+        let ParseResult::Value(str, value) = &results[11] else {panic!()};
+        assert_eq!("50 kč", str);
+        assert_eq!(50.0, *value);
     }
 
     #[test]
@@ -180,5 +216,32 @@ mod tests {
         let match_str = "69.420kc";
         let true_value = test_parser.get_true_value(value, match_str);
         assert_eq!(value, true_value);
+    }
+
+    #[test]
+    fn check_text_result() {
+        let text = "sample text without any keyword";
+        let result = Parser::check_for_keyword(text);
+        assert_eq!(false, result);
+        let text = "sample text with branik in it";
+        let result = Parser::check_for_keyword(text);
+        assert_eq!(true, result);
+    }
+
+    #[test]
+    fn test_parse_result_compare() {
+        let result1 = ParseResult::Keyword;
+        let result2 = ParseResult::Keyword;
+        assert_eq!(true, result2 == result1);
+        assert_eq!(true, result1 == result2);
+        let result1 = ParseResult::Value("100kc".to_string(), 100.0);
+        assert_eq!(false, result1 == result2);
+        assert_eq!(false, result2 == result1);
+        let result2 = ParseResult::Value("3 000 kc".to_string(), 3000.0);
+        assert_eq!(false, result1 == result2);
+        assert_eq!(false, result2 == result1);
+        let result2 = ParseResult::Value("100,-".to_string(), 100.0);
+        assert_eq!(true, result2 == result1);
+        assert_eq!(true, result1 == result2);
     }
 }
