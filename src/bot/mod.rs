@@ -161,14 +161,14 @@ impl BranikBot {
                 // No comment body - nothing to parse
                 continue;
             };
-            let matches = if let Some(m) = self.parser.parse(&comment_body) {
-                m
+            let results = if let Some(r) = self.parser.parse(&comment_body) {
+                r
             } else {
                 // No matches in comment 
                 continue;
             };
             self.post_response(
-                &self.generate_message_for_results(&matches),
+                &self.generate_message_for_results(&results),
                 &comment.name.clone().unwrap().to_string()).await;
         }
     }
@@ -248,8 +248,9 @@ impl BranikBot {
     }
 
     async fn post_response(&self, response: &str, comment_id: &str) {
+        println!("\nCreated response \n{}\nto comment {}", response, comment_id);
         if self.config.post_response {
-            println!("\nPosted response {}\nto comment {}", response, comment_id);
+            println!("Posting response...");
             let r = self.reddit_client.as_ref().expect("Expected reddit client being logged in").comment(response, comment_id).await;
             match r {
                 Ok(_) => (),
@@ -257,6 +258,7 @@ impl BranikBot {
             }
         }
         if self.config.save_response {
+            println!("Saving response...");
             let open_file = fs::OpenOptions::new()
                 .write(true)
                 .create(true)
