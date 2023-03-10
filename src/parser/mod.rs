@@ -57,7 +57,7 @@ impl Parser {
         // no value in the text
         if !is_match {
             // check for keywords
-            match Self::check_for_keyword(text) {
+            match Self::check_for_keyword(&binding) {
                 false => return None,
                 true => return Some(vec![ParseResult::Keyword])
             }
