@@ -1,6 +1,7 @@
 use core::time;
 use std::{thread, fs, io::Write};
 
+use chrono::{Datelike, Local};
 use roux::{Reddit, Me, comment::CommentData, Subreddit, User};
 use crate::{parser::{Parser, ParseResult}, comment_reader::CommentReader};
 use self::price_reader::PriceReader;
@@ -70,9 +71,19 @@ impl BranikBot {
         } 
     }
 
+    fn check_day_change(&self, last_day: &mut u32) -> bool {
+        let today = Local::now().day();
+        if today != *last_day {
+            *last_day = today;
+            return true;
+        }
+        false
+    }
+
     pub async fn run(&mut self) {
         // if set to 0, will run indefinitely
         let max_cycles: i32 = self.config.run_cycles;
+        let mut last_day = Local::now().day();
         let mut count = 0;
         loop {
             if self.needs_update_price {
@@ -92,16 +103,14 @@ impl BranikBot {
             }
             count += 1;
             if max_cycles > 0 {
-                println!("Cycle completed, {} cycles left", max_cycles - count);
+                println!("Cycle completed at {}, {} cycles left", Local::now(), max_cycles - count);
             } else {
-                println!("{} cycles completed.", count);
+                println!("Cycle completed at {}, {} cycles completed.", Local::now(), count);
             }
             if count == max_cycles {
                 break;
             }
-            // TODO: better logic for this - update before each cycle right after midnight,
-            // no need to update so often
-            self.needs_update_price = count % 12 == 0;
+            self.needs_update_price = self.check_day_change(&mut last_day);
             self.sleep(); 
         }
     }
