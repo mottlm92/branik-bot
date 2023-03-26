@@ -99,7 +99,7 @@ impl BranikBot {
     }
 
     fn sleep(&self) {
-        thread::sleep(time::Duration::from_secs(60 * 1));
+        thread::sleep(time::Duration::from_secs(60 * 5));
     }
 
     async fn update_price(&mut self) {
