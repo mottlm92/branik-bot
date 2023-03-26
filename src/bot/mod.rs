@@ -1,7 +1,7 @@
 use core::time;
-use std::{thread, fs, io::Write};
+use std::{thread, fs, io::Write, ops::Sub};
 
-use chrono::{Datelike, Local};
+use chrono::Local;
 use roux::{Reddit, Me, comment::CommentData, Subreddit, User};
 use crate::{parser::{Parser, ParseResult}, comment_reader::CommentReader};
 use self::price_reader::PriceReader;
@@ -17,7 +17,6 @@ pub struct BranikBot {
     price_reader: PriceReader,
     parser: Parser,
     user: User,
-    needs_update_price: bool,
     branik_price: f32
 }
 
@@ -31,6 +30,7 @@ impl BranikBot {
 
     const RESPONSE_PREFIX: &str = "To by stacilo na ";
     const RESPONSE_SUFFIX: &str = "Branika ve sleve!";
+    const RUN_DURATION_MINUTES_LIMIT: i64 = 60 * 4;
 
     pub async fn respawn() -> Self {
         let config = Config::load();
@@ -50,12 +50,16 @@ impl BranikBot {
             parser,
             user,
             price_reader,
-            needs_update_price: true,
             branik_price: default_price
         }
     }
 
     async fn login(config: &Config) -> Option<Me> { 
+        if !config.post_response {
+            println!("POST_RESPONSE set to false, skipping Login");
+            return None;
+        }
+        println!("Loggin in");
         let client = Reddit::new(&config.user_agent, &config.client_id, &config.client_secret)
             .username(&config.user_name)
             .password(&config.password)
@@ -71,24 +75,13 @@ impl BranikBot {
         } 
     }
 
-    fn check_day_change(&self, last_day: &mut u32) -> bool {
-        let today = Local::now().day();
-        if today != *last_day {
-            *last_day = today;
-            return true;
-        }
-        false
-    }
-
     pub async fn run(&mut self) {
-        // if set to 0, will run indefinitely
-        let max_cycles: i32 = self.config.run_cycles;
-        let mut last_day = Local::now().day();
-        let mut count = 0;
+        let start = Local::now();
+        self.update_price().await;
         loop {
-            if self.needs_update_price {
-                self.update_price().await;
-                println!("Price updated!");
+            if Local::now().sub(start).num_minutes() > Self::RUN_DURATION_MINUTES_LIMIT {
+                // restart the bot after few hours
+                break;
             }
             println!("\nRead new comments!");
             match self.comment_reader.read_latest_comments().await {
@@ -101,22 +94,12 @@ impl BranikBot {
                     self.parse_comments_and_create_responses(comments).await;
                 }
             }
-            count += 1;
-            if max_cycles > 0 {
-                println!("Cycle completed at {}, {} cycles left", Local::now(), max_cycles - count);
-            } else {
-                println!("Cycle completed at {}, {} cycles completed.", Local::now(), count);
-            }
-            if count == max_cycles {
-                break;
-            }
-            self.needs_update_price = self.check_day_change(&mut last_day);
             self.sleep(); 
         }
     }
 
     fn sleep(&self) {
-        thread::sleep(time::Duration::from_secs(60 * 5));
+        thread::sleep(time::Duration::from_secs(60 * 1));
     }
 
     async fn update_price(&mut self) {
@@ -199,7 +182,7 @@ impl BranikBot {
     }
 
     fn generate_keyword_result_row(&self) -> String {
-        format!("Dvoulitrovka Branika ve sleve aktualne stoji {} korun.", self.branik_price)
+        format!("Dvoulitrovka Branika ve sleve aktualne stoji {}0,-", self.branik_price.to_string().replace(".", ","))
     }
 
     fn generate_value_result_row(&self, parsed_value: &String, parsed_result: f32) -> String {
@@ -289,9 +272,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_result_row() {
-
-        let test_bot = BranikBot ::respawn().await;
-
+        let test_bot = BranikBot::respawn().await;
         let parse_result = ParseResult::Value( "20 kc".to_string(), 20.0);
         let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 20 kc\n\nJe mi to lito, ale to neni ani na jednu dvoulitrovku Branika ve sleve.\n\n"));
@@ -316,5 +297,12 @@ mod tests {
         let parse_result = ParseResult::Value("150k".to_string(), 150000.0);
         let response_row = test_bot.generate_result_row(&parse_result);
         assert_eq!(response_row, format!("> 150k\n\n{}vic jak {} palet ({} baliku) dvoulitrovek {}\n\n", BranikBot::RESPONSE_PREFIX, (150000.0 / (12.0*8.0*3.0*test_bot.config.default_price)) as i32, (150000.0 / test_bot.config.default_price / 6.0) as i32, BranikBot::RESPONSE_SUFFIX));
+    }
+
+    #[tokio::test]
+    async fn test_branik_price_row() {
+        let test_bot = BranikBot::respawn().await;
+        let result = test_bot.generate_keyword_result_row();
+        assert_eq!(result, format!("Dvoulitrovka Branika ve sleve aktualne stoji 39,90,-"));
     }
 }

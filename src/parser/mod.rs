@@ -37,7 +37,7 @@ impl Parser {
     pub fn new() -> Parser {
         let parser = Parser {
             main_regex: Regex::new(r"( |^)(((\d+[ ,.]?)+?(kc|kč|czk|mega|korun))|(\d+[,.]?\d+(k))|(\d+[k]))+(\b)|((\d+[ .|,]?)+(,-))").unwrap(),
-            value_regex: Regex::new(r"(\d+[ ,.]?)+(\d+)?").unwrap(),
+            value_regex: Regex::new(r"(\d?[ ,.]?)+(\d+)").unwrap(),
             unit_regex: Regex::new(r"([\p{L}+]+)|(mega)|(,-)").unwrap()
         };
         parser
@@ -88,13 +88,19 @@ impl Parser {
     }
 
     fn get_value_from_match(&self, match_str: &str) -> Option<f32> {
+        println!("MATCH = {}", &match_str);
         let capture = self.value_regex.captures(&match_str).unwrap();
+        println!("CAPTURE = {}", capture[0].trim());
         if match_str.ends_with("k") || match_str.ends_with("mega") {
             // if value doesn't end with exact unit only remove whitespace
             capture[0].replace(",", ".").replace(" ", "").parse::<f32>().ok()
+        } else if !capture[0].contains(",") {
+            // remove whitespace and "." which are used as whitespace to improve readability but
+            // don't have any real purpose
+            capture[0].replace(" ", "").replace(".", "").parse::<f32>().ok()
         } else {
-            // if value ends with remove all punctuation and whitespace
-            capture[0].replace(",", "").replace(" ", "").replace(".", "").parse::<f32>().ok()
+            // value contains "," which is used as delimiter for decimal values - i.e. 42,50 Kc
+            capture[0].replace(",", ".").parse::<f32>().ok()
         }
     }
 
@@ -134,9 +140,9 @@ is just loose numbers like 69420 without any currency specification, same with l
     fn test_parse_unit_from_value_result() {
         let test_parser = Parser::new();
         let test_data = "Let's see if all 200k, 1.5k and 6,9k are correct.. and these totally random numbers 69 420 should be ignored.. But 2 mega should not! also add 60 kc and 100kc,
-but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 000 000 czk what about like 3.5 mega? 30 - 50 kč";
+but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 000 000 czk what about like 3.5 mega? 30 - 50 kč what about 42,50 kc and 0,90kc";
         let results = test_parser.parse(test_data).unwrap();
-        assert_eq!(results.len(), 12);
+        assert_eq!(results.len(), 14);
         let ParseResult::Value(str, value) = &results[0] else {panic!()};
         assert_eq!("200k", str);
         assert_eq!(200000.0, *value);
@@ -173,6 +179,12 @@ but should be implemented 3 000 kc and this 1.900,- is parsed, 3.000.000 kc, 6 0
         let ParseResult::Value(str, value) = &results[11] else {panic!()};
         assert_eq!("50 kč", str);
         assert_eq!(50.0, *value);
+        let ParseResult::Value(str, value) = &results[12] else {panic!()};
+        assert_eq!("42,50 kc", str);
+        assert_eq!(42.5, *value);
+        let ParseResult::Value(str, value) = &results[13] else {panic!()};
+        assert_eq!("0,90kc", str);
+        assert_eq!(0.9, *value);
     }
 
     #[test]
