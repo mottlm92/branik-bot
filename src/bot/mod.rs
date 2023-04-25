@@ -182,7 +182,7 @@ impl BranikBot {
     }
 
     fn generate_keyword_result_row(&self) -> String {
-        format!("Dvoulitrovka Branika ve sleve aktualne stoji {}0,-", self.branik_price.to_string().replace(".", ","))
+        format!("Dvoulitrovka Branika ve sleve aktualne stoji {}0 Kč", self.branik_price.to_string().replace(".", ","))
     }
 
     fn generate_value_result_row(&self, parsed_value: &String, parsed_result: f32) -> String {

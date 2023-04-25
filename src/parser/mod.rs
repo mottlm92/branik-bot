@@ -88,9 +88,7 @@ impl Parser {
     }
 
     fn get_value_from_match(&self, match_str: &str) -> Option<f32> {
-        println!("MATCH = {}", &match_str);
         let capture = self.value_regex.captures(&match_str).unwrap();
-        println!("CAPTURE = {}", capture[0].trim());
         if match_str.ends_with("k") || match_str.ends_with("mega") {
             // if value doesn't end with exact unit only remove whitespace
             capture[0].replace(",", ".").replace(" ", "").parse::<f32>().ok()
