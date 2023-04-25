@@ -303,6 +303,6 @@ mod tests {
     async fn test_branik_price_row() {
         let test_bot = BranikBot::respawn().await;
         let result = test_bot.generate_keyword_result_row();
-        assert_eq!(result, format!("Dvoulitrovka Branika ve sleve aktualne stoji 39,90,-"));
+        assert_eq!(result, format!("Dvoulitrovka Branika ve sleve aktualne stoji 39,90 Kč"));
     }
 }
