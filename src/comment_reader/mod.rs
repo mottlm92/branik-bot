@@ -8,7 +8,7 @@ pub struct CommentReader {
 
 impl CommentReader {
     pub async fn read_latest_comments(&self) -> Option<Vec<CommentData>> {
-        let latest_comments = self.subreddit.latest_comments(None, Some(25)).await.ok()?;
+        let latest_comments = self.subreddit.latest_comments(None, Some(25)).await.expect("Expected comments");
         // load last read comment id from file in order to not read it again
         let last_read_comment_id = match self.load_last_read_comment() {
             Some(comment_id) => comment_id,

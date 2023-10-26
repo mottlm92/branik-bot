@@ -109,7 +109,11 @@ impl BranikBot {
         } else {
             self.config.default_price
         };
-        self.branik_price = price;
+        if price > 0.0 {
+            self.branik_price = price;
+        } else {
+            self.branik_price = self.config.default_price
+        }
     }
 
     async fn load_post_ids_for_posted_comments(&self) -> Vec<String> {
