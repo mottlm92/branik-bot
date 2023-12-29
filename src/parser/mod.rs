@@ -43,7 +43,7 @@ impl Parser {
         parser
     }
 
-    const KEYWORDS: [&str; 6] = [
+    const KEYWORDS: [&'static str; 6] = [
         "branik",
         "braník",
         "bráník",

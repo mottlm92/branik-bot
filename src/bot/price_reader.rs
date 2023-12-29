@@ -4,7 +4,7 @@ pub struct PriceReader {
 }
 
 impl PriceReader {
-    const URL: &str = "https://www.akcniceny.cz/akce/branik-pivo-vycepni-svetle-2-0l-pet/";
+    const URL: &'static str = "https://www.akcniceny.cz/akce/branik-pivo-vycepni-svetle-2-0l-pet/";
 
     pub async fn load_and_parse_branik_price(&self, default_price: f32) -> Result<f32, Error> {
         let return_default = |s: &str| {

@@ -28,8 +28,8 @@ enum BranikAmount {
 
 impl BranikBot {
 
-    const RESPONSE_PREFIX: &str = "To by stacilo na ";
-    const RESPONSE_SUFFIX: &str = "Branika ve sleve!";
+    const RESPONSE_PREFIX: &'static str = "To by stacilo na ";
+    const RESPONSE_SUFFIX: &'static str = "Branika ve sleve!";
     const RUN_DURATION_MINUTES_LIMIT: i64 = 60 * 4;
 
     pub async fn respawn() -> Self {
